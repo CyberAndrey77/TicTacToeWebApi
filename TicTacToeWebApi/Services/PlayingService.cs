@@ -86,14 +86,14 @@ namespace TicTacToeWebApi.Services
         #endregion
 
         #region MakeTurn
-        public async Task<CurrentTurnModel> MakeTurn(TurnModel model)
+        public async Task<ConditionSessionModel> MakeTurn(TurnModel model)
         {
             var session = await Task.Run(() => FindSession(model.SessionId));
             if (session.Player1 == null || session.Player2 == null)
             {
                 throw new ArgumentNullException("Нет второго игрока");
             }
-            var turnModel = new CurrentTurnModel();
+            var turnModel = new ConditionSessionModel();
             if (session.Winner != null)
             {
                 turnModel.Error = $"Игра окончена. Победил {session.Winner.Name}";
@@ -227,10 +227,10 @@ namespace TicTacToeWebApi.Services
             return session;
         }
 
-        public async Task<CurrentTurnModel> GetCurrentTurn(int sessionId)
+        public async Task<ConditionSessionModel> GetCurrentTurn(int sessionId)
         {
             var session = await Task.Run(() => FindSession(sessionId));
-            return new CurrentTurnModel() 
+            return new ConditionSessionModel() 
             { 
                 TurnPlayer = session.TurnPlayer, Field = session.Field, Winner = session.Winner 
             };

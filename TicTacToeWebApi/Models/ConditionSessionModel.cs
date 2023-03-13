@@ -1,6 +1,6 @@
 ﻿namespace TicTacToeWebApi.Models
 {
-    public class CurrentTurnModel
+    public class ConditionSessionModel
     {
         public Player? TurnPlayer { get; set; }
         public string[] Field { get; set; }
