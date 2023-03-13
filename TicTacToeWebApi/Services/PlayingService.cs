@@ -94,6 +94,11 @@ namespace TicTacToeWebApi.Services
                 throw new ArgumentNullException("Нет второго игрока");
             }
             var turnModel = new CurrentTurnModel();
+            if (session.Winner != null)
+            {
+                turnModel.Error = $"Игра окончена. Победил {session.Winner.Name}";
+                return turnModel;
+            }
             if (session.TurnPlayer.Id != model.Player.Id)
             {
                 turnModel.TurnPlayer = session.TurnPlayer;
@@ -114,7 +119,6 @@ namespace TicTacToeWebApi.Services
                 session.Winner = session.TurnPlayer;
                 sessionContext.Winner = session.TurnPlayer;
                 turnModel.Winner = session.TurnPlayer;
-                _gameSessions.Remove(session);
             }
             else
             {
