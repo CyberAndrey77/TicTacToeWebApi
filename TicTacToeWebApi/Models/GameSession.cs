@@ -10,6 +10,7 @@ namespace TicTacToeWebApi.Models
         public string? Player1Symbol { get; set; }
         public string? Player2Symbol { get; set; }
         public Player? Winner { get; set; }
+        public bool IsClosed { get; set; }
 
         //Нужно для отслеживания очередности ходов, нет смысла записывать в бд
         [NotMapped]

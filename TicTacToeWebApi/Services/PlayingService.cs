@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography.Xml;
+using System.Timers;
 using TicTacToeWebApi.Models;
 using TicTacToeWebApi.Services.Interfaces;
 
@@ -10,6 +11,7 @@ namespace TicTacToeWebApi.Services
         private ApplicationContextService _context;
         //TODO сделать кик афк игроков!!!!!!!
         private List<GameSession> _gameSessions;
+        private float _turnTime;
 
         public PlayingService(ApplicationContextService context, GameSessions sessions)
         {
@@ -88,15 +90,22 @@ namespace TicTacToeWebApi.Services
         #region MakeTurn
         public async Task<ConditionSessionModel> MakeTurn(TurnModel model)
         {
+            var turnModel = new ConditionSessionModel();
             var session = await Task.Run(() => FindSession(model.SessionId));
+            if (!SessionIsActive(turnModel, session))
+            {
+                return turnModel;
+            }
+            if (session.IsClosed)
+            {
+                turnModel.Error = $"Игра окончена";
+                turnModel.Code = ErrorCode.GameOver;
+                return turnModel;
+            }
             if (session.Player1 == null || session.Player2 == null)
             {
-                throw new ArgumentNullException("Нет второго игрока");
-            }
-            var turnModel = new ConditionSessionModel();
-            if (session.Winner != null)
-            {
-                turnModel.Error = $"Игра окончена. Победил {session.Winner.Name}";
+                turnModel.Error = $"Ожидание второго игрока";
+                turnModel.Code = ErrorCode.WaitPlayer;
                 return turnModel;
             }
             if (session.TurnPlayer.Id != model.Player.Id)
@@ -109,16 +118,33 @@ namespace TicTacToeWebApi.Services
 
             var symbol = session.TurnPlayer == session.Player1 ?
                 session.Player1Symbol : session.Player2Symbol;
-
-            session.Field[model.Position] = symbol;
+            if (session.Field[model.Position] == null)
+            {
+                session.Field[model.Position] = symbol;
+            }
+            else
+            {
+                turnModel.TurnPlayer = session.TurnPlayer;
+                turnModel.Field = session.Field;
+                turnModel.Error = "Место уже занято";
+                return turnModel;
+            }
+            
 
             turnModel.Field = session.Field;
-            bool isWinner = await Task.Run(() => CheckWinner(symbol, session));
-            if (isWinner)
+            bool isWinner = await Task.Run(() => HasWinner(symbol, session));
+            bool isGameOver = await Task.Run(() => IsGameOver(session));
+            if (isWinner || isGameOver)
             {
-                session.Winner = session.TurnPlayer;
-                sessionContext.Winner = session.TurnPlayer;
-                turnModel.Winner = session.TurnPlayer;
+                if (isWinner)
+                {
+                    session.Winner = session.TurnPlayer;
+                    sessionContext.Winner = session.TurnPlayer;
+                    turnModel.Winner = session.TurnPlayer;
+                }
+                session.IsClosed = true;
+                sessionContext.IsClosed = true;
+                Task.Run(() => CloseGameSession(session));
             }
             else
             {
@@ -131,7 +157,7 @@ namespace TicTacToeWebApi.Services
             return turnModel;
         }
 
-        private bool CheckWinner(string symbol, GameSession session)
+        private bool HasWinner(string symbol, GameSession session)
         {
             for (int i = 0; i < session.Field.Length; i += 3)
             {
@@ -165,27 +191,49 @@ namespace TicTacToeWebApi.Services
             }
         }
 
+        private bool IsGameOver(GameSession session)
+        {
+            for (int i = 0; i < session.Field.Length; i++)
+            {
+                if (session.Field[i] == null)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         #endregion
 
         #region SelectSymbol
-        public async Task<bool> SelectSymbol(SelectSymbolModel model)
+        public async Task<ConditionSessionModel> SelectSymbol(SelectSymbolModel model)
         {
+            var currentCondition = new ConditionSessionModel();
             //Нолик это символ О, а не цифра нуль, нолик тоненький)
             if (model.Symbol != "X" && model.Symbol != "O")
             {
-                throw new ArgumentException("Выбран не верный символ"); //Смэрть неверным)))
+                currentCondition.Error = "Выбран не верный символ"; //Смэрть неверным)))
+                currentCondition.Code = ErrorCode.SelectedIncorrectSymbol; 
+                return currentCondition;
             }
             var session = await Task.Run(() => FindSession(model.SessionId));
-
+            if (!SessionIsActive(currentCondition, session))
+            {
+                return currentCondition;
+            }
             if (model.PlayerId == session.Player1.Id)
             {
-                if (model.Symbol == session?.Player2Symbol)
+                if (model.Symbol == session.Player2Symbol)
                 {
-                    return false;
+                    currentCondition.Error = "Символ уже занят";
+                    currentCondition.Code = ErrorCode.SysymbolIsTaken;
+                    return currentCondition;
                 }
                 else
                 {
                     session.Player1Symbol = model.Symbol;
+                    currentCondition.Playe1Symbol = model.Symbol;
                     var sessionContext = await _context.GameSessions.FirstOrDefaultAsync(x => x.Id == session.Id);
                     sessionContext.Player1Symbol = session.Player1Symbol;
                     _context.SaveChangesAsync();
@@ -193,13 +241,16 @@ namespace TicTacToeWebApi.Services
             }
             else
             {
-                if (model.Symbol == session?.Player1Symbol)
+                if (model.Symbol == session.Player1Symbol)
                 {
-                    return false;
+                    currentCondition.Error = "Символ уже занят";
+                    currentCondition.Code = ErrorCode.SysymbolIsTaken;
+                    return currentCondition;
                 }
                 else
                 {
                     session.Player2Symbol = model.Symbol;
+                    currentCondition.Playe2Symbol = model.Symbol;
                     var sessionContext = await _context.GameSessions.FirstOrDefaultAsync(x => x.Id == session.Id);
                     sessionContext.Player2Symbol = session.Player2Symbol;
                     _context.SaveChangesAsync();
@@ -208,22 +259,20 @@ namespace TicTacToeWebApi.Services
             if (session.Player1Symbol == "X")
             {
                 session.TurnPlayer = session.Player1;
+                currentCondition.TurnPlayer = session.Player1;
             }
             else
             {
                 session.TurnPlayer = session.Player2;
+                currentCondition.TurnPlayer = session.Player2;
             }
-            return true;
+            return currentCondition;
         }
         #endregion
 
         private GameSession FindSession(int sessionId)
         {
             var session = _gameSessions.FirstOrDefault(x => x.Id == sessionId);
-            if (session == null)
-            {
-                throw new ArgumentNullException("Сессии не существует");
-            }
             return session;
         }
 
@@ -240,6 +289,23 @@ namespace TicTacToeWebApi.Services
         {
             var session = await Task.Run(() => FindSession(sessionId));
             return new bool[] { session.Player1 != null, session.Player2 != null };
+        }
+
+        private async void CloseGameSession(GameSession session)
+        {
+            await Task.Delay(60000);
+            _gameSessions.Remove(session);
+        }
+
+        private bool SessionIsActive(ConditionSessionModel model, GameSession session)
+        {
+            if (session == null)
+            {
+                model.Error = "Сессия не найдена";
+                model.Code = ErrorCode.SessionNotFound;
+                return false;
+            }
+            return true;
         }
     }
 }
