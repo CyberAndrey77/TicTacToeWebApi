@@ -127,6 +127,7 @@ namespace TicTacToeWebApi.Services
                 turnModel.TurnPlayer = session.TurnPlayer;
                 turnModel.Field = session.Field;
                 turnModel.Error = "Место уже занято";
+                turnModel.Code = ErrorCode.PlaceIsTaken;
                 return turnModel;
             }
             
