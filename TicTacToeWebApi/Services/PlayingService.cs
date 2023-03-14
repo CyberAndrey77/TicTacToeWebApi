@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Security.AccessControl;
 using System.Security.Cryptography.Xml;
 using System.Timers;
 using TicTacToeWebApi.Models;
@@ -134,7 +135,7 @@ namespace TicTacToeWebApi.Services
 
             turnModel.Field = session.Field;
             bool isWinner = await Task.Run(() => HasWinner(symbol, session));
-            bool isGameOver = await Task.Run(() => IsGameOver(session));
+            bool isGameOver = true;//await Task.Run(() => IsGameOver(session));
             if (isWinner || isGameOver)
             {
                 if (isWinner)
@@ -145,6 +146,7 @@ namespace TicTacToeWebApi.Services
                 }
                 session.IsClosed = true;
                 sessionContext.IsClosed = true;
+                //что бы игроки могли получить данные что игра закончилась и кто в ней победил
                 Task.Run(() => CloseGameSession(session));
             }
             else
@@ -155,6 +157,7 @@ namespace TicTacToeWebApi.Services
             }
             sessionContext.Turns.Add(new Turn(model.Player, symbol, model.Position));
             _context.SaveChangesAsync();
+            ViewSybolPlayers(turnModel, session);
             return turnModel;
         }
 
@@ -234,7 +237,6 @@ namespace TicTacToeWebApi.Services
                 else
                 {
                     session.Player1Symbol = model.Symbol;
-                    currentCondition.Playe1Symbol = model.Symbol;
                     var sessionContext = await _context.GameSessions.FirstOrDefaultAsync(x => x.Id == session.Id);
                     sessionContext.Player1Symbol = session.Player1Symbol;
                     _context.SaveChangesAsync();
@@ -251,12 +253,14 @@ namespace TicTacToeWebApi.Services
                 else
                 {
                     session.Player2Symbol = model.Symbol;
-                    currentCondition.Playe2Symbol = model.Symbol;
                     var sessionContext = await _context.GameSessions.FirstOrDefaultAsync(x => x.Id == session.Id);
                     sessionContext.Player2Symbol = session.Player2Symbol;
                     _context.SaveChangesAsync();
                 }
             }
+
+            ViewSybolPlayers(currentCondition, session);
+
             if (session.Player1Symbol == "X")
             {
                 session.TurnPlayer = session.Player1;
@@ -307,6 +311,13 @@ namespace TicTacToeWebApi.Services
                 return false;
             }
             return true;
+        }
+
+        private void ViewSybolPlayers(ConditionSessionModel model, GameSession session)
+        {
+
+            model.Playe1Symbol = session.Player1Symbol;
+            model.Playe2Symbol = session.Player2Symbol;
         }
     }
 }

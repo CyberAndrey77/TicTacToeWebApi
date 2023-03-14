@@ -32,7 +32,7 @@ namespace TicTacToeWebApi.Controllers
             {
                 int sessionId = await _playingService.AddPlayer(player);
 
-                return Ok(new {sessionId});
+                return Ok(new { player, sessionId });
             }
             catch (ArgumentException ex)
             {
@@ -45,17 +45,14 @@ namespace TicTacToeWebApi.Controllers
         {
             try
             {
-                bool isSelected = await _playingService.SelectSymbol(model);
-                if (!isSelected)
-                {
-                    return BadRequest("Данный символ уже занят");
-                }
+                var answer = await _playingService.SelectSymbol(model);
+
+                return Ok(answer);
             }
             catch (ArgumentException ex)
             {
-                return BadRequest($"Данный символ {ex}, не допустим");
+                return BadRequest(ex);
             }
-            return Ok("Символ успешно выбран");
         }
 
         [HttpGet("get_check_all_players_connect")]
