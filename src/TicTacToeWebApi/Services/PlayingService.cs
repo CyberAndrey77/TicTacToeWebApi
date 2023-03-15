@@ -1,11 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System.Reflection;
-using System.Security.AccessControl;
-using System.Security.Cryptography.Xml;
 using System.Timers;
 using TicTacToeWebApi.Models;
 using TicTacToeWebApi.Services.Interfaces;
-using static Npgsql.PostgresTypes.PostgresCompositeType;
 
 namespace TicTacToeWebApi.Services
 {
@@ -36,20 +32,20 @@ namespace TicTacToeWebApi.Services
         {
             int sessionId = -1;
             int index = 0;
-            bool IsConnectPlayer1 = false;
+            bool isConnectPlayer1 = false;
             for (int i = 0; i < _gameSessions.Count; i++)
             {
                 //Пока не понял как избавиться от этого дублирования
                 if (_gameSessions[i].Player1 == null)
                 {
-                    IsConnectPlayer1 = true;
+                    isConnectPlayer1 = true;
                     _gameSessions[i].Player1 = player;
                     index = i;
                     sessionId = _gameSessions[i].Id; break;
                 }
                 if (_gameSessions[i].Player2 == null)
                 {
-                    IsConnectPlayer1 = false;
+                    isConnectPlayer1 = false;
                     _gameSessions[i].Player2 = player;
                     index = i;
                     sessionId = _gameSessions[i].Id; break;
@@ -66,7 +62,7 @@ namespace TicTacToeWebApi.Services
             {
                 throw new ArgumentNullException("Не удалось найти игровую сессию в базе данных");
             }
-            if (IsConnectPlayer1)
+            if (isConnectPlayer1)
             {
                 sessionContext.Player1 = _gameSessions[index].Player1;
             }
@@ -126,11 +122,9 @@ namespace TicTacToeWebApi.Services
             }
             else
             {
-                turnModel.TurnPlayer = session.TurnPlayer;
-                turnModel.Field = session.Field;
                 turnModel.Error = "Место уже занято";
                 turnModel.Code = ErrorCode.PlaceIsTaken;
-                return turnModel;
+                return GetInfoSession(turnModel, session);
             }
 
             bool isWinner = await Task.Run(() => HasWinner(symbol, session));
