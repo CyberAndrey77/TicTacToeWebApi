@@ -1,9 +1,8 @@
 ﻿namespace TicTacToeWebApi.Models
 {
-    public class SelectSymbolModel
+    public class RemovePlayerModel
     {
         public int SessionId { get; set; }
         public Player Player { get; set; }
-        public string Symbol { get; set; }
     }
 }

@@ -94,5 +94,18 @@ namespace TicTacToeWebApi.Controllers
                 return BadRequest(ex.Message);
             }
         }
+
+        [HttpPost("disconnect")]
+        public async Task<IActionResult> Disconnect(RemovePlayerModel model)
+        {
+            try
+            {
+                return Ok(await _playingService.RemovePlayer(model));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
     }
 }
