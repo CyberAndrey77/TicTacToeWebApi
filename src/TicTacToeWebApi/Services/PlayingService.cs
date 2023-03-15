@@ -35,15 +35,31 @@ namespace TicTacToeWebApi.Services
             bool isConnectPlayer1 = false;
             for (int i = 0; i < _gameSessions.Count; i++)
             {
-                //Пока не понял как избавиться от этого дублирования
-                if (_gameSessions[i].Player1 == null)
+                //Пока не понял как избавиться от дублирования
+                if (_gameSessions[i].IsClosed)
+                {
+                    continue;
+                }
+                else if (_gameSessions[i].Player1?.Id == player.Id)
+                {
+                    _gameSessions[i].Player1 = player;
+                    sessionId = _gameSessions[i].Id; 
+                    return sessionId;
+                }
+                else if (_gameSessions[i].Player2?.Id == player.Id)
+                {
+                    _gameSessions[i].Player2 = player;
+                    sessionId = _gameSessions[i].Id;
+                    return sessionId;
+                }
+                else if (_gameSessions[i].Player1 == null)
                 {
                     isConnectPlayer1 = true;
                     _gameSessions[i].Player1 = player;
                     index = i;
                     sessionId = _gameSessions[i].Id; break;
                 }
-                if (_gameSessions[i].Player2 == null)
+                else if (_gameSessions[i].Player2 == null)
                 {
                     isConnectPlayer1 = false;
                     _gameSessions[i].Player2 = player;
@@ -88,31 +104,44 @@ namespace TicTacToeWebApi.Services
         #region MakeTurn
         public async Task<ConditionSessionModel> MakeTurn(TurnModel model)
         {
-            var turnModel = new ConditionSessionModel();
+            var currentCondition = new ConditionSessionModel();
             var session = await Task.Run(() => FindSession(model.SessionId));
-            if (!SessionIsActive(turnModel, session))
+            if (!SessionIsActive(currentCondition, session))
             {
-                return turnModel;
+                return currentCondition;
             }
             if (session.IsClosed)
             {
-                turnModel = GetInfoSession(turnModel, session);
-                turnModel.Error = $"Игра окончена";
-                turnModel.Code = ErrorCode.GameOver;
-                return turnModel;
+                currentCondition.Error = $"Игра окончена";
+                currentCondition.Code = ErrorCode.GameOver;
+                return GetInfoSession(currentCondition, session);
             }
             if (session.Player1 == null || session.Player2 == null)
             {
-                turnModel = GetInfoSession(turnModel, session);
-                turnModel.Error = $"Ожидание второго игрока";
-                turnModel.Code = ErrorCode.WaitPlayer;
-                return turnModel;
+                currentCondition.Error = $"Ожидание второго игрока";
+                currentCondition.Code = ErrorCode.WaitPlayer;
+                return GetInfoSession(currentCondition, session);
+            }
+            if (model.Player.Id != session.Player1.Id && model.Player.Id != session.Player2.Id)
+            {
+                currentCondition.Error = "Неверные данные игрока";
+                currentCondition.Code = ErrorCode.IncorrectPlayerData;
+                return GetInfoSession(currentCondition, session);
             }
             if (session.TurnPlayer.Id != model.Player.Id)
             {
-                return GetInfoSession(turnModel, session);
+                currentCondition.Error = "Ход другого игрока";
+                currentCondition.Code = ErrorCode.TurnAnotherPlayer;
+                return GetInfoSession(currentCondition, session);
             }
-            var sessionContext = await _context.GameSessions.FirstOrDefaultAsync(x => x.Id == model.SessionId);
+            if (model.Position > session.Field.Length - 1)
+            {
+                currentCondition.Error = "Выбрана позиция выходит за пределы поля";
+                currentCondition.Code = ErrorCode.PlaceIsTaken;
+                return GetInfoSession(currentCondition, session);
+            }
+            var sessionContext = await _context.GameSessions.Include(x => x.Turns)
+                .FirstOrDefaultAsync(x => x.Id == model.SessionId);
 
             var symbol = session.TurnPlayer == session.Player1 ?
                 session.Player1Symbol : session.Player2Symbol;
@@ -122,9 +151,9 @@ namespace TicTacToeWebApi.Services
             }
             else
             {
-                turnModel.Error = "Место уже занято";
-                turnModel.Code = ErrorCode.PlaceIsTaken;
-                return GetInfoSession(turnModel, session);
+                currentCondition.Error = "Место уже занято";
+                currentCondition.Code = ErrorCode.PlaceIsTaken;
+                return GetInfoSession(currentCondition, session);
             }
 
             bool isWinner = await Task.Run(() => HasWinner(symbol, session));
@@ -143,12 +172,14 @@ namespace TicTacToeWebApi.Services
             }
             else
             {
+                sessionContext.Turns.Add(
+                    new Turn(session.TurnPlayer, symbol, model.Position, sessionContext.Turns.Count + 1));
                 session.TurnPlayer = session.TurnPlayer != session.Player1 ?
-                session.Player1 : session.Player2;
+                    session.Player1 : session.Player2;
             }
-            sessionContext.Turns.Add(new Turn(model.Player, symbol, model.Position));
-            _context.SaveChangesAsync();
-            return GetInfoSession(turnModel, session);
+            
+            await _context.SaveChangesAsync();
+            return GetInfoSession(currentCondition, session);
         }
 
         private bool HasWinner(string symbol, GameSession session)
@@ -212,43 +243,46 @@ namespace TicTacToeWebApi.Services
             }
             if (model.Symbol != "X" && model.Symbol != "O")
             {
-                currentCondition = GetInfoSession(currentCondition, session);
                 currentCondition.Error = "Выбран не верный символ"; //Смэрть неверным)))
                 currentCondition.Code = ErrorCode.SelectedIncorrectSymbol; 
-                return currentCondition;
+                return GetInfoSession(currentCondition, session);
+            }
+            if (model.Player.Id != session.Player1.Id && model.Player.Id != session.Player2.Id)
+            {
+                currentCondition.Error = "Неверные данные игрока";
+                currentCondition.Code = ErrorCode.IncorrectPlayerData;
+                return GetInfoSession(currentCondition, session);
             }
             if (model.Player.Id == session.Player1.Id)
             {
                 if (model.Symbol == session.Player2Symbol)
                 {
-                    currentCondition = GetInfoSession(currentCondition, session);
                     currentCondition.Error = "Символ уже занят";
                     currentCondition.Code = ErrorCode.SysymbolIsTaken;
-                    return currentCondition;
+                    return GetInfoSession(currentCondition, session);
                 }
                 else
                 {
                     session.Player1Symbol = model.Symbol;
                     var sessionContext = await _context.GameSessions.FirstOrDefaultAsync(x => x.Id == session.Id);
                     sessionContext.Player1Symbol = session.Player1Symbol;
-                    _context.SaveChangesAsync();
+                    await _context.SaveChangesAsync();
                 }
             }
             else
             {
                 if (model.Symbol == session.Player1Symbol)
                 {
-                    currentCondition = GetInfoSession(currentCondition, session);
                     currentCondition.Error = "Символ уже занят";
                     currentCondition.Code = ErrorCode.SysymbolIsTaken;
-                    return currentCondition;
+                    return GetInfoSession(currentCondition, session);
                 }
                 else
                 {
                     session.Player2Symbol = model.Symbol;
                     var sessionContext = await _context.GameSessions.FirstOrDefaultAsync(x => x.Id == session.Id);
                     sessionContext.Player2Symbol = session.Player2Symbol;
-                    _context.SaveChangesAsync();
+                    await _context.SaveChangesAsync();
                 }
             }
 

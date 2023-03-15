@@ -4,8 +4,8 @@ namespace TicTacToeWebApi.Models
 {
     public class Turn
     {
-        [Key]
-        public int NumberTurn { get; set; }
+        public int Id { get; set; }
+        public int TurnNumber { get; set; }
         public Player Player { get; set; }
         public string Symbol { get; set; }
         public int Position { get; set; }
@@ -17,11 +17,13 @@ namespace TicTacToeWebApi.Models
         {
 
         }
-        public Turn(Player player, string symbol, int position)
+
+        public Turn(Player player, string symbol, int position, int turnNumber)
         {
             Player = player;
             Symbol = symbol;
             Position = position;
+            TurnNumber = turnNumber;
         }
     }
 }

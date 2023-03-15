@@ -10,6 +10,9 @@
         PlayerNotTakenSybol = 6004,
         WaitPlayer = 6005,
         SessionNotFound = 6006,
-        SelectedIncorrectSymbol = 6007
+        SelectedIncorrectSymbol = 6007,
+        IncorrectPlayerData = 6008,
+        TurnAnotherPlayer = 6009,
+        PlaceIsOutside = 6010
     }
 }
