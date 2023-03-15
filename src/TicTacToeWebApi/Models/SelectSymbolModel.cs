@@ -2,8 +2,8 @@
 {
     public class SelectSymbolModel
     {
-        public int PlayerId { get; set; }
         public int SessionId { get; set; }
+        public Player Player { get; set; }
         public string Symbol { get; set; }
     }
 }

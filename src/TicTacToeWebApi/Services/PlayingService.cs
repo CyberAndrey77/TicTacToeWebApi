@@ -1,6 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System.Security.AccessControl;
-using System.Security.Cryptography.Xml;
 using System.Timers;
 using TicTacToeWebApi.Models;
 using TicTacToeWebApi.Services.Interfaces;
@@ -12,7 +10,6 @@ namespace TicTacToeWebApi.Services
         private ApplicationContextService _context;
         //TODO сделать кик афк игроков!!!!!!!
         private List<GameSession> _gameSessions;
-        private float _turnTime;
 
         public PlayingService(ApplicationContextService context, GameSessions sessions)
         {
@@ -35,20 +32,20 @@ namespace TicTacToeWebApi.Services
         {
             int sessionId = -1;
             int index = 0;
-            bool IsConnectPlayer1 = false;
+            bool isConnectPlayer1 = false;
             for (int i = 0; i < _gameSessions.Count; i++)
             {
                 //Пока не понял как избавиться от этого дублирования
                 if (_gameSessions[i].Player1 == null)
                 {
-                    IsConnectPlayer1 = true;
+                    isConnectPlayer1 = true;
                     _gameSessions[i].Player1 = player;
                     index = i;
                     sessionId = _gameSessions[i].Id; break;
                 }
                 if (_gameSessions[i].Player2 == null)
                 {
-                    IsConnectPlayer1 = false;
+                    isConnectPlayer1 = false;
                     _gameSessions[i].Player2 = player;
                     index = i;
                     sessionId = _gameSessions[i].Id; break;
@@ -65,7 +62,7 @@ namespace TicTacToeWebApi.Services
             {
                 throw new ArgumentNullException("Не удалось найти игровую сессию в базе данных");
             }
-            if (IsConnectPlayer1)
+            if (isConnectPlayer1)
             {
                 sessionContext.Player1 = _gameSessions[index].Player1;
             }
@@ -99,21 +96,21 @@ namespace TicTacToeWebApi.Services
             }
             if (session.IsClosed)
             {
+                turnModel = GetInfoSession(turnModel, session);
                 turnModel.Error = $"Игра окончена";
                 turnModel.Code = ErrorCode.GameOver;
                 return turnModel;
             }
             if (session.Player1 == null || session.Player2 == null)
             {
+                turnModel = GetInfoSession(turnModel, session);
                 turnModel.Error = $"Ожидание второго игрока";
                 turnModel.Code = ErrorCode.WaitPlayer;
                 return turnModel;
             }
             if (session.TurnPlayer.Id != model.Player.Id)
             {
-                turnModel.TurnPlayer = session.TurnPlayer;
-                turnModel.Field = session.Field;
-                return turnModel;
+                return GetInfoSession(turnModel, session);
             }
             var sessionContext = await _context.GameSessions.FirstOrDefaultAsync(x => x.Id == model.SessionId);
 
@@ -125,24 +122,19 @@ namespace TicTacToeWebApi.Services
             }
             else
             {
-                turnModel.TurnPlayer = session.TurnPlayer;
-                turnModel.Field = session.Field;
                 turnModel.Error = "Место уже занято";
                 turnModel.Code = ErrorCode.PlaceIsTaken;
-                return turnModel;
+                return GetInfoSession(turnModel, session);
             }
-            
 
-            turnModel.Field = session.Field;
             bool isWinner = await Task.Run(() => HasWinner(symbol, session));
-            bool isGameOver = true;//await Task.Run(() => IsGameOver(session));
+            bool isGameOver = await Task.Run(() => IsGameOver(session));
             if (isWinner || isGameOver)
             {
                 if (isWinner)
                 {
                     session.Winner = session.TurnPlayer;
                     sessionContext.Winner = session.TurnPlayer;
-                    turnModel.Winner = session.TurnPlayer;
                 }
                 session.IsClosed = true;
                 sessionContext.IsClosed = true;
@@ -153,12 +145,10 @@ namespace TicTacToeWebApi.Services
             {
                 session.TurnPlayer = session.TurnPlayer != session.Player1 ?
                 session.Player1 : session.Player2;
-                turnModel.TurnPlayer = session.TurnPlayer;
             }
             sessionContext.Turns.Add(new Turn(model.Player, symbol, model.Position));
             _context.SaveChangesAsync();
-            ViewSybolPlayers(turnModel, session);
-            return turnModel;
+            return GetInfoSession(turnModel, session);
         }
 
         private bool HasWinner(string symbol, GameSession session)
@@ -215,21 +205,23 @@ namespace TicTacToeWebApi.Services
         {
             var currentCondition = new ConditionSessionModel();
             //Нолик это символ О, а не цифра нуль, нолик тоненький)
-            if (model.Symbol != "X" && model.Symbol != "O")
-            {
-                currentCondition.Error = "Выбран не верный символ"; //Смэрть неверным)))
-                currentCondition.Code = ErrorCode.SelectedIncorrectSymbol; 
-                return currentCondition;
-            }
             var session = await Task.Run(() => FindSession(model.SessionId));
             if (!SessionIsActive(currentCondition, session))
             {
                 return currentCondition;
             }
-            if (model.PlayerId == session.Player1.Id)
+            if (model.Symbol != "X" && model.Symbol != "O")
+            {
+                currentCondition = GetInfoSession(currentCondition, session);
+                currentCondition.Error = "Выбран не верный символ"; //Смэрть неверным)))
+                currentCondition.Code = ErrorCode.SelectedIncorrectSymbol; 
+                return currentCondition;
+            }
+            if (model.Player.Id == session.Player1.Id)
             {
                 if (model.Symbol == session.Player2Symbol)
                 {
+                    currentCondition = GetInfoSession(currentCondition, session);
                     currentCondition.Error = "Символ уже занят";
                     currentCondition.Code = ErrorCode.SysymbolIsTaken;
                     return currentCondition;
@@ -246,6 +238,7 @@ namespace TicTacToeWebApi.Services
             {
                 if (model.Symbol == session.Player1Symbol)
                 {
+                    currentCondition = GetInfoSession(currentCondition, session);
                     currentCondition.Error = "Символ уже занят";
                     currentCondition.Code = ErrorCode.SysymbolIsTaken;
                     return currentCondition;
@@ -259,21 +252,43 @@ namespace TicTacToeWebApi.Services
                 }
             }
 
-            ViewSybolPlayers(currentCondition, session);
-
             if (session.Player1Symbol == "X")
             {
                 session.TurnPlayer = session.Player1;
-                currentCondition.TurnPlayer = session.Player1;
             }
             else
             {
                 session.TurnPlayer = session.Player2;
-                currentCondition.TurnPlayer = session.Player2;
             }
-            return currentCondition;
+            return GetInfoSession(currentCondition, session);
         }
         #endregion
+
+        #region RemovePlayer
+        public async Task<ConditionSessionModel> RemovePlayer(RemovePlayerModel model)
+        {
+            var currentCondition = new ConditionSessionModel();
+            var session = await Task.Run(() => FindSession(model.SessionId));
+            if (!SessionIsActive(currentCondition, session))
+            {
+                return currentCondition;
+            }
+            if (session.Player1 != null && session.Player2 != null)
+            {
+                if (session.Player1.Id == model.Player.Id)
+                {
+                    session.Winner = session.Player2;
+                }
+                else
+                {
+                    session.Winner = session.Player1;
+                }
+            }
+            session.IsClosed = true;
+            return GetInfoSession(currentCondition, session);
+        }
+        #endregion
+
 
         private GameSession FindSession(int sessionId)
         {
@@ -284,10 +299,13 @@ namespace TicTacToeWebApi.Services
         public async Task<ConditionSessionModel> GetCurrentTurn(int sessionId)
         {
             var session = await Task.Run(() => FindSession(sessionId));
-            return new ConditionSessionModel() 
-            { 
-                TurnPlayer = session.TurnPlayer, Field = session.Field, Winner = session.Winner 
-            };
+            var conditionSession = new ConditionSessionModel();
+            if (!SessionIsActive(conditionSession, session))
+            {
+                return conditionSession;
+            }
+            
+            return GetInfoSession(conditionSession, session);
         }
         
         public async Task<bool[]> CheckAllPlayers(int sessionId)
@@ -298,7 +316,7 @@ namespace TicTacToeWebApi.Services
 
         private async void CloseGameSession(GameSession session)
         {
-            await Task.Delay(60000);
+            await Task.Delay(30000);
             _gameSessions.Remove(session);
         }
 
@@ -312,12 +330,17 @@ namespace TicTacToeWebApi.Services
             }
             return true;
         }
-
-        private void ViewSybolPlayers(ConditionSessionModel model, GameSession session)
+        private ConditionSessionModel GetInfoSession(ConditionSessionModel model, GameSession session)
         {
-
+            model.Player1 = session.Player1;
+            model.Player2 = session.Player2;
             model.Playe1Symbol = session.Player1Symbol;
             model.Playe2Symbol = session.Player2Symbol;
+            model.TurnPlayer = session.TurnPlayer;
+            model.Field = session.Field;
+            model.Winner = session.Winner;
+            model.IsGameOver = session.IsClosed;
+            return model;
         }
     }
 }

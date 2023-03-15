@@ -9,5 +9,6 @@ namespace TicTacToeWebApi.Services.Interfaces
         Task<ConditionSessionModel> MakeTurn(TurnModel model);
         Task<ConditionSessionModel> GetCurrentTurn(int sessionId);
         Task<bool[]> CheckAllPlayers(int sessionId);
+        Task<ConditionSessionModel> RemovePlayer(RemovePlayerModel model);
     }
 }

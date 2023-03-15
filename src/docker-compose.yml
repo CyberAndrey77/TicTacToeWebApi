@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  webapinotes:
+    container_name: tictactoewebapi
+    depends_on:
+      - "postgers"
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "62305:80"
+      - "62306:443"
+    expose:
+      - "80"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      DB_CONNECTION_STRING: "Host=postgers;Port=5432;Database=Game;Username=postgres;Password=159753"
+
+
+  postgers:
+    image: postgres
+    expose:
+      - "5432"
+    restart: always
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "159753"
+      POSTGRES_DB: "Game"
